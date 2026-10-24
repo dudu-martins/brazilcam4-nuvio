@@ -182,4 +182,6 @@ builder.defineStreamHandler(async ({ id }) => {
   }
 });
 
-serveHTTP(builder.getInterface(), { port: process.env.PORT || 7000 });
+serveHTTP(builder.getInterface(), {
+  port: Number(process.env.PORT) || 7000
+});
