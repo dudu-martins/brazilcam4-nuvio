@@ -1,4 +1,9 @@
-const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
+const { addonBuilder, getRouter } = require("stremio-addon-sdk");
+const express = require("express");
+const { instalarChat } = require("./chat-live.cjs");
+const { instalarHls } = require("./hls-chat.cjs");
+
+const PUBLIC_URL = process.env.PUBLIC_URL || "http://127.0.0.1:7000";
 
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36";
 const PREFIX = "cam4:";
@@ -16,10 +21,10 @@ const ORDENACOES = [
 
 const manifest = {
   id: "community.cam4.brasil",
-  version: "1.1.0",
+  version: "1.2.0",
   name: "CAM4 Brasil (Homens)",
-  description: "Transmissões ao vivo do CAM4 - Brasil",
-  resources: ["catalog", "meta", "stream"],
+  description: "TransmissÃµes ao vivo do CAM4 - Brasil",
+  resources: ["catalog", "meta", "stream", "subtitles"],
   types: ["tv"],
   idPrefixes: [PREFIX],
   catalogs: [{
@@ -45,7 +50,7 @@ async function getJson(url) {
   return r.json();
 }
 
-// Converte campo de data/tempo em número (aceita timestamp ou string de data)
+// Converte campo de data/tempo em nÃºmero (aceita timestamp ou string de data)
 function paraTempo(v) {
   if (v == null || v === "") return null;
   if (typeof v === "number") return v < 1e12 ? v * 1000 : v;
@@ -99,7 +104,7 @@ async function listarOnline() {
   }
 
   const users = [...vistos.values()];
-  console.log(`[catalogo] ${users.length} transmissões do Brasil`);
+  console.log(`[catalogo] ${users.length} transmissÃµes do Brasil`);
   cache = { t: Date.now(), data: users };
   return users;
 }
@@ -166,22 +171,93 @@ builder.defineStreamHandler(async ({ id }) => {
     const d = await getJson(`https://www.cam4.com/rest/v1.0/profile/${u}/streamInfo`);
     if (!d.cdnURL) return { streams: [] };
     return {
-      streams: [{
-        name: "CAM4",
-        title: "Ao vivo (HLS)",
-        url: d.cdnURL,
-        behaviorHints: {
-          notWebReady: true,
-          proxyHeaders: { request: { "User-Agent": UA, Referer: "https://www.cam4.com/" } }
-        }
-      }]
-    };
+  streams: [
+    {
+      name: "CAM4",
+      title: "Ao vivo (HLS + chat)",
+      url:
+        PUBLIC_URL +
+        "/hls/" +
+        encodeURIComponent(u) +
+        "/master.m3u8",
+      behaviorHints: {
+        notWebReady: true
+      }
+    }
+  ]
+};
   } catch (e) {
     console.error("[stream]", u, e.message);
     return { streams: [] };
   }
 });
 
-serveHTTP(builder.getInterface(), {
-  port: Number(process.env.PORT) || 7000
+builder.defineSubtitlesHandler(async () => {
+  return { subtitles: [] };
+});
+
+const app = express();
+
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
+function horarioVtt(segundos) {
+  const horas = Math.floor(segundos / 3600);
+  const minutos = Math.floor((segundos % 3600) / 60);
+  const seg = segundos % 60;
+
+  return [horas, minutos, seg]
+    .map(n => String(n).padStart(2, "0"))
+    .join(":") + ".000";
+}
+
+function escaparVtt(texto) {
+  return String(texto)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll(String.fromCharCode(13), " ")
+    .replaceAll(String.fromCharCode(10), " ");
+}
+
+app.get("/chat-teste/:usuario.vtt", (req, res) => {
+  const partes = [
+    "WEBVTT",
+    "",
+    "1",
+    "00:00:00.000 --> 10:00:00.000",
+    "TESTE CONTINUO: se esta linha permanecer, o Stremio aceita legenda longa.",
+    ""
+  ];
+
+  res.setHeader(
+    "Content-Type",
+    "text/vtt; charset=utf-8"
+  );
+
+  res.setHeader(
+    "Cache-Control",
+    "no-store"
+  );
+
+  res.send(partes.join(String.fromCharCode(10)));
+});
+
+instalarChat(app);
+instalarHls(app);
+
+app.use(getRouter(builder.getInterface()));
+
+const port = Number(process.env.PORT) || 7000;
+
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Addon ouvindo na porta ${port}`);
+  console.log(`Manifest: ${PUBLIC_URL}/manifest.json`);
 });
