@@ -304,6 +304,28 @@ function instalarChat(app) {
     return s;
   }
 
+  app.use("/hls/:usuario", function (req, res, next) {
+    const nome = String(req.params.usuario || "")
+      .trim()
+      .toLowerCase();
+
+    if (!nomeValido(nome)) {
+      return next();
+    }
+
+    try {
+      obter(nome);
+    } catch (erro) {
+      console.error(
+        "[chat] Não foi possível acompanhar:",
+        nome,
+        erro.message
+      );
+    }
+
+    next();
+  });
+
   app.get("/chat-live/:usuario.json", function (req, res) {
     res.setHeader("Cache-Control", "no-store");
 
