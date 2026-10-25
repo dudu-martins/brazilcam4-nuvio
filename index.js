@@ -3,7 +3,7 @@ const express = require("express");
 const { instalarChat } = require("./chat-live.cjs");
 const { instalarHls } = require("./hls-chat.cjs");
 
-const PUBLIC_URL = process.env.PUBLIC_URL || "http://127.0.0.1:7000";
+const PUBLIC_URL = process.env.PUBLIC_URL || "https://brazilcam4-nuvio.onrender.com";
 
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36";
 const PREFIX = "cam4:";
