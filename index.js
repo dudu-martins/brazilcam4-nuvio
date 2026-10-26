@@ -5,12 +5,15 @@ const {
 
 const express = require("express");
 
-const PUBLIC_URL =
+let PUBLIC_URL =
   process.env.PUBLIC_URL ||
   "https://brazilcam4-nuvio.onrender.com";
 
-const UA =
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36";
+while (PUBLIC_URL.endsWith("/")) {
+  PUBLIC_URL = PUBLIC_URL.slice(0, -1);
+}
+
+const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36";
 
 const PREFIX = "cam4:";
 const MAX_PAGES = 15;
@@ -24,9 +27,10 @@ const ORDENACOES = [
 
 const manifest = {
   id: "community.cam4.brasil",
-  version: "1.2.1",
+  version: "1.2.2",
   name: "CAM4 Brasil (Homens)",
-  description: "Transmissões ao vivo do CAM4 - Brasil",
+  description:
+    "Transmissões ao vivo do CAM4 - Brasil",
 
   resources: [
     "catalog",
@@ -70,8 +74,10 @@ const builder = new addonBuilder(manifest);
 
 function thumb(usuario) {
   return (
-    "https://snapshots.xcdnpro.com/thumbnails/" +
-    encodeURIComponent(usuario)
+    PUBLIC_URL +
+    "/imagem/" +
+    encodeURIComponent(usuario) +
+    ".jpg"
   );
 }
 
@@ -86,7 +92,10 @@ async function getJson(url) {
 
   if (!resposta.ok) {
     throw new Error(
-      "HTTP " + resposta.status + " em " + url
+      "HTTP " +
+      resposta.status +
+      " em " +
+      url
     );
   }
 
@@ -139,7 +148,9 @@ async function listarOnline() {
       );
     }
 
-    const respostas = await Promise.all(lote);
+    const respostas =
+      await Promise.all(lote);
+
     let paginasVazias = 0;
 
     for (const resposta of respostas) {
@@ -211,27 +222,34 @@ function ordenar(lista, modo) {
 
   switch (modo) {
     case "Mais Espectadores":
-      return resultado.sort(function (a, b) {
-        return b.viewers - a.viewers;
-      });
+      return resultado.sort(
+        function (a, b) {
+          return b.viewers - a.viewers;
+        }
+      );
 
     case "Menos Espectadores":
-      return resultado.sort(function (a, b) {
-        return a.viewers - b.viewers;
-      });
+      return resultado.sort(
+        function (a, b) {
+          return a.viewers - b.viewers;
+        }
+      );
 
     case "Em destaque":
     default:
-      return resultado.sort(function (a, b) {
-        return a.ordem - b.ordem;
-      });
+      return resultado.sort(
+        function (a, b) {
+          return a.ordem - b.ordem;
+        }
+      );
   }
 }
 
 builder.defineCatalogHandler(
   async function ({ extra }) {
     try {
-      let usuarios = await listarOnline();
+      let usuarios =
+        await listarOnline();
 
       if (extra?.search) {
         const busca = String(
@@ -271,9 +289,15 @@ builder.defineCatalogHandler(
               PREFIX + usuario.username,
             type: "tv",
             name: usuario.username,
+
             poster:
               thumb(usuario.username),
+
+            background:
+              thumb(usuario.username),
+
             posterShape: "landscape",
+
             description:
               usuario.viewers +
               " espectadores. " +
@@ -397,6 +421,113 @@ app.use(function (req, res, next) {
 
   next();
 });
+
+app.get(
+  "/imagem/:usuario.jpg",
+  async function (req, res) {
+    try {
+      const usuario = String(
+        req.params.usuario || ""
+      ).trim();
+
+      if (
+        usuario === "" ||
+        usuario.length > 100 ||
+        usuario.includes("/")
+      ) {
+        return res.status(400).send(
+          "Nome de camera invalido"
+        );
+      }
+
+      const url =
+        "https://snapshots.xcdnpro.com/thumbnails/" +
+        encodeURIComponent(usuario);
+
+      const resposta = await fetch(url, {
+        headers: {
+          "User-Agent": UA,
+          Accept: "image/*",
+          Referer:
+            "https://www.cam4.com/"
+        },
+        signal:
+          AbortSignal.timeout(15000)
+      });
+
+      if (!resposta.ok) {
+        console.error(
+          "[imagem] HTTP:",
+          resposta.status,
+          usuario
+        );
+
+        return res.status(502).send(
+          "Imagem indisponivel"
+        );
+      }
+
+      const tipo = (
+        resposta.headers.get(
+          "content-type"
+        ) || ""
+      )
+        .split(";")[0]
+        .trim()
+        .toLowerCase();
+
+      if (tipo !== "image/jpeg") {
+        console.error(
+          "[imagem] Tipo inesperado:",
+          tipo,
+          usuario
+        );
+
+        return res.status(502).send(
+          "Formato de imagem inesperado"
+        );
+      }
+
+      const imagem = Buffer.from(
+        await resposta.arrayBuffer()
+      );
+
+      if (
+        imagem.length < 3 ||
+        imagem[0] !== 255 ||
+        imagem[1] !== 216 ||
+        imagem[2] !== 255
+      ) {
+        return res.status(502).send(
+          "Resposta nao reconhecida como JPEG"
+        );
+      }
+
+      res.setHeader(
+        "Content-Type",
+        "image/jpeg"
+      );
+
+      res.setHeader(
+        "Cache-Control",
+        "public, max-age=60"
+      );
+
+      res.send(imagem);
+    } catch (erro) {
+      console.error(
+        "[imagem]",
+        erro.message
+      );
+
+      if (!res.headersSent) {
+        res.status(502).send(
+          "Falha ao carregar imagem"
+        );
+      }
+    }
+  }
+);
 
 app.use(
   getRouter(
