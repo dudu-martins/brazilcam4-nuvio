@@ -5,6 +5,8 @@ const {
 
 const express = require("express");
 
+const path = require("path");
+
 let PUBLIC_URL =
   process.env.PUBLIC_URL ||
   "https://brazilcam4-nuvio.onrender.com";
@@ -26,11 +28,12 @@ const ORDENACOES = [
 ];
 
 const manifest = {
-  id: "community.cam4.brasil",
+  id: "community.nuviocam4",
   version: "1.2.2",
-  name: "CAM4 Brasil (Homens)",
+  name: "Nuvio Cam4 Men Brazil",
   description:
     "Transmissões ao vivo do CAM4 - Brasil",
+  logo: PUBLIC_URL + "/logo.png",
 
   resources: [
     "catalog",
@@ -408,6 +411,10 @@ builder.defineStreamHandler(
 );
 
 const app = express();
+
+app.get("/logo.png", (req, res) => {
+  res.sendFile(path.join(__dirname, "logo.png"));
+});
 
 app.use(function (req, res, next) {
   res.setHeader(
