@@ -30,7 +30,7 @@ const ORDENACOES = [
 const manifest = {
   id: "community.nuviocam4",
   version: "1.2.2",
-  name: "Nuvio Cam4 Men Brazil",
+  name: "NuvioCam4",
   description:
     "Transmissões ao vivo do CAM4 - Brasil",
   logo: PUBLIC_URL + "/logo.png",
